@@ -1,0 +1,2 @@
+,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,windup_days,windup_hours
+0,0,MDOT3082,US 127 NB and Pine River,43.3968,-84.6324,40.49976712633902,True,False,False,False,False,6.630847999999998,0.0,14.236767869353981,341

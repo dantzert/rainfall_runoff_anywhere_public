@@ -1,0 +1,2 @@
+,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,far_precip_mm_training_offset,windup_days,windup_hours
+0,0,0,0,MDOT752,M 22 and Betsie River,44.6203,-86.2218,759.5731324544884,True,False,True,False,False,1.0105679999999997,0.0,0.0,18.440581389733932,442

@@ -1,0 +1,2 @@
+,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,windup_days,windup_hours
+0,0,MDOT7075,US 23 and Middle Branch Macon Creek,41.9831,-83.6783,2.429986027580341,True,False,False,False,False,-0.24129866666666844,0.0,14.014206072161238,336

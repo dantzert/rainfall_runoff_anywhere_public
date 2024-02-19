@@ -1,0 +1,2 @@
+,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,snowmelt_nowind_training_offset,snowmelt_wind_training_offset,windup_days,windup_hours
+0,0,MDOT8955,M 68 and Trout River,45.4022,-83.8782,2.632484863212037,True,False,False,True,True,1.6943386666666669,0.0,0.0,0.0,14.01538991150801,336

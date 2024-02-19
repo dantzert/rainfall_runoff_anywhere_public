@@ -1,0 +1,2 @@
+,Unnamed: 0.4,Unnamed: 0.3,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,training_offset_ft,windup_days,windup_hours,training_offset_mm,depth_ft_training_offset,close_precip_mm_training_offset
+0,0,0,0,0,0,DET004,Romeo and Partridge,42.620428,-82.934666,1.4174918494218658,True,False,False,False,False,1.3766759862175486,14.00828687542739,336,3513.0,0.7144933333333333,0.0

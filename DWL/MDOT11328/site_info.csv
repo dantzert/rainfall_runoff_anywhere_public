@@ -1,0 +1,2 @@
+,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,mid_precip_mm_training_offset,far_precip_mm_training_offset,snowmelt_nowind_training_offset,snowmelt_wind_training_offset,windup_days,windup_hours
+0,0,MDOT11328,M 153 and Rouge River,42.3283,-83.2415,1467.3065629872629,True,True,True,True,True,2.439008000000001,0.0,0.0,0.0,0.0,0.0,22.578099906694767,541

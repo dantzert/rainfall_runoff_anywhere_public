@@ -1,0 +1,2 @@
+,Unnamed: 0.3,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,mid_precip_mm_training_offset,far_precip_mm_training_offset,windup_days,windup_hours,snowmelt_nowind_training_offset,snowmelt_wind_training_offset
+0,0,0,0,0,ARB025,Huron River at Maiden Lane,42.287704,-83.73317,2097.280440637466,True,True,True,True,True,0.4842373333333339,0.0,0.0,0.0,26.261024114495953,630,0.0,0.0
