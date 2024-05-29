@@ -2,8 +2,13 @@ import requests
 import re
 import dill as pickle
 import pandas as pd
-import rainfall_runoff_anywhere
+import sys
 import os
+parent_dir = os.path.dirname(os.getcwd())
+sys.path.append(parent_dir)
+sys.path.append(str(parent_dir + '/rainfall_runoff_anywhere'))
+sys.path.append(str(parent_dir + '/modpods'))
+import rainfall_runoff_anywhere
 import datetime
 import time
 
@@ -88,8 +93,8 @@ with open ("usgs_sites.txt",'w') as fp:
 
 '''
 # load sites from text file
-
-with open("G:/My Drive/rainfall_runoff_anywhere/usgs_sites.txt",'r') as fp:
+with open("usgs_sites.txt",'r') as fp:
+#with open("G:/My Drive/rainfall_runoff_anywhere/usgs_sites.txt",'r') as fp:
     sites = fp.read().splitlines()
 
 #print(sites)

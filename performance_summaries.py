@@ -12,7 +12,7 @@ import copy
 # show all the columns whenever we print a dataframe
 pd.set_option('display.max_columns', None) # comment out if too much text output
 
-dataset = "usgs" # usgs, DWL (sewer omitted for privacy reasons)
+dataset = "usgs" # usgs, DWL, or GLWA
 show = False # show the plots live or just save them
 if dataset == "usgs":
     data_configs = ['discharge','stage','discharge_station_precip','stage_station_precip']
@@ -21,8 +21,14 @@ if dataset == "usgs":
 if dataset == "DWL":
     model_configs = ['poly1','poly2','poly3']
 
+if dataset == "GLWA":
+    time_configs = ['hourly','train_first','train_last']
+    target_configs = ['flow','depth']
+    data_configs = ['rain_gage_only','meteostat_only','rain_gage_and_meteostat']
+    model_configs = ['poly1','poly2','poly3']
 
-folder_path = str("C:/rainfall_runoff_anywhere/" + dataset + "/")
+#folder_path = str("C:/rainfall_runoff_anywhere/" + dataset + "/")
+folder_path = str(dataset + "/")
 
 if dataset == "usgs":
     for subdir, dirs, files in os.walk(folder_path): 
@@ -77,7 +83,15 @@ if dataset == "usgs":
     for data_config in training_performance_data.index.get_level_values(0).unique():
         for site_id in training_performance_data.index.get_level_values(2).unique():
             success = False
-            total_time = np.nansum(training_performance_data.loc[data_config,:,site_id]['training_time_minutes'])
+            # if at least one of the entries in the slice is not nan, then we can sum the training times
+            if not training_performance_data.loc[data_config,:,site_id]['training_time_minutes'].isnull().all():
+                total_time = np.nansum(training_performance_data.loc[data_config,:,site_id]['training_time_minutes'])
+            else:
+                continue
+            if total_time < 0.01:
+                print("total_time < 0.01")
+                print(training_performance_data.loc[data_config,:,site_id])
+                print(training_performance_data.loc[data_config,:,site_id]['training_time_minutes'])
             for model_config in training_performance_data.index.get_level_values(1).unique():
                 try:
                     if not success: # only want to record this once per site such that the statistics are correct
@@ -94,7 +108,8 @@ if dataset == "usgs":
     print("\n")
     print("Evaluation Performance Data statistics")
     print(eval_performance_data.describe())
-
+    
+    
     # create Figure 2 for both discharge and stage
     for data_config in ['discharge_station_precip','stage_station_precip']:
         print(data_config)
@@ -143,12 +158,16 @@ if dataset == "usgs":
         for model_config in eval_performance_data.index.get_level_values(1).unique():
             # iterate over the site_id index in eval_performance_data
             for site_id in wo_training_NSE.index:
-                # save 'final' in eval_NSE as the NSE for the model_config that has the highest training NSE (without station precip)
-                if wo_training_NSE.loc[site_id,model_config] == max(wo_training_NSE.loc[site_id]):
-                    w_eval_NSE.loc[site_id,'final'] = w_eval_NSE.loc[site_id,model_config]
-                    w_eval_NSE.loc[site_id,'final_config'] = str(model_config)
-                    wo_eval_NSE.loc[site_id,'final'] = wo_eval_NSE.loc[site_id,model_config]
-                    wo_eval_NSE.loc[site_id,'final_config'] = str(model_config)
+                try:
+                    # save 'final' in eval_NSE as the NSE for the model_config that has the highest training NSE (without station precip)
+                    if wo_training_NSE.loc[site_id,model_config] == max(wo_training_NSE.loc[site_id]):
+                        w_eval_NSE.loc[site_id,'final'] = w_eval_NSE.loc[site_id,model_config]
+                        w_eval_NSE.loc[site_id,'final_config'] = str(model_config)
+                        wo_eval_NSE.loc[site_id,'final'] = wo_eval_NSE.loc[site_id,model_config]
+                        wo_eval_NSE.loc[site_id,'final_config'] = str(model_config)
+                except Exception as e:
+                    print(e)
+                    pass
 
         # drop any rows which are only na in training_NSE and eval_NSE
         w_eval_NSE = w_eval_NSE.dropna(how='all')
@@ -195,28 +214,35 @@ if dataset == "usgs":
         cdf_axis.set_ylabel('Cumulative Density', fontsize='xx-large')
         cdf_axis.set_title(str(str(dataset) + " " + data_config[:-15] + "\n# of sites = " + str(len(w_eval_NSE.index)) ) , fontsize='xx-large')
 
+        quantile_interp_method = 'nearest' # 'lower', 'nearest', 'higher', 'midpoint'
 
         # which site_id has the maximum value for the 'final' column in wo_eval_NSE?
-        wo_max_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(1.0,interpolation='nearest')].dropna(how='all')
+        wo_max_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(1.0,interpolation=quantile_interp_method)].dropna(how='all')
         wo_max_NSE.loc[wo_max_NSE.index[0],'final_config'] = wo_eval_NSE.loc[wo_max_NSE.index[0],'final_config'] # this shouldn't be necessary. not sure what's goign on in the previous line
-        w_max_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(1.0,interpolation='nearest')].dropna(how='all')
+        w_max_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(1.0,interpolation=quantile_interp_method)].dropna(how='all')
         w_max_NSE.loc[w_max_NSE.index[0],'final_config'] = w_eval_NSE.loc[w_max_NSE.index[0],'final_config'] # this shouldn't be necessary. not sure what's goign on in the previous line
         print("Site with maximum NSE: ")
         print(wo_max_NSE)
         print(w_max_NSE)
-
+        '''
+        # find the evaluatoin mean absolute error (MAE) and root mean square error (RMSE) for the site with the maximum NSE
+        wo_max_NSE_MAE = eval_performance_data.loc[data_config[:-15],wo_max_NSE['final_config'][0],wo_max_NSE.index[0]]['MAE']
+        wo_max_NSE_RMSE = eval_performance_data.loc[data_config[:-15],wo_max_NSE['final_config'][0],wo_max_NSE.index[0]]['RMSE']
+        w_max_NSE_MAE = eval_performance_data.loc[data_config,w_max_NSE['final_config'][0],w_max_NSE.index[0]]['MAE']
+        w_max_NSE_RMSE = eval_performance_data.loc[data_config,w_max_NSE['final_config'][0],w_max_NSE.index[0]]['RMSE']
+        '''
         # which site_id has the median value for the 'final' column in wo_eval_NSE?
-        wo_median_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.5,interpolation='nearest')].dropna(how='all')
+        wo_median_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.5,interpolation=quantile_interp_method)].dropna(how='all')
         wo_median_NSE.loc[wo_median_NSE.index[0],'final_config'] = wo_eval_NSE.loc[wo_median_NSE.index[0],'final_config']
-        w_median_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.5,interpolation='nearest')].dropna(how='all')
+        w_median_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.5,interpolation=quantile_interp_method)].dropna(how='all')
         w_median_NSE.loc[w_median_NSE.index[0],'final_config'] = wo_eval_NSE.loc[w_median_NSE.index[0],'final_config']
         print("Site with median NSE: ")
         print(wo_median_NSE)
         print(w_median_NSE)
         # which site_id has the 25th percentile value for the 'final' column in wo_eval_NSE?
-        wo_quartile_one_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.25,interpolation='nearest')].dropna(how='all')
+        wo_quartile_one_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.25,interpolation=quantile_interp_method)].dropna(how='all')
         wo_quartile_one_NSE.loc[wo_quartile_one_NSE.index[0],'final_config'] = wo_eval_NSE.loc[wo_quartile_one_NSE.index[0],'final_config']
-        w_quartile_one_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.25,interpolation='nearest')].dropna(how='all')
+        w_quartile_one_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.25,interpolation=quantile_interp_method)].dropna(how='all')
         w_quartile_one_NSE.loc[w_quartile_one_NSE.index[0],'final_config'] = w_eval_NSE.loc[w_quartile_one_NSE.index[0],'final_config']
         print("Site with 25th percentile NSE: ")
         print(wo_quartile_one_NSE)
@@ -233,7 +259,11 @@ if dataset == "usgs":
         wo_max_NSE_axis.imshow(wo_max_NSE_image)
         w_max_NSE_axis.imshow(w_max_NSE_image)
         wo_max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(wo_max_NSE['final'][0]) ) ) ,fontsize='x-large')
+        # add the MAE and RMSE to the title
+        #wo_max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(wo_max_NSE['final'][0]) ) + "\nMAE = " + str('{0:.2f}'.format(wo_max_NSE_MAE) ) + "\nRMSE = " + str('{0:.2f}'.format(wo_max_NSE_RMSE) ) ) ,fontsize='x-large')
         w_max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(w_max_NSE['final'][0]) ) ) ,fontsize='x-large')
+        # add the MAE and RMSE to the title
+        #w_max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(w_max_NSE['final'][0]) ) + "\nMAE = " + str('{0:.2f}'.format(w_max_NSE_MAE) ) + "\nRMSE = " + str('{0:.2f}'.format(w_max_NSE_RMSE) ) ) ,fontsize='x-large')
         # plot the same triangle in the upper left corner of the max_NSE_axis
         #max_NSE_axis.plot(0.1,0.9,marker='^',color='black',markersize=10)
 
@@ -271,15 +301,14 @@ if dataset == "usgs":
         if show:
             plt.show()
         print("\n")
-
-
-
     
     # creating a summary figure for each data_config
     # iterate over the data_config index in eval_performance_data (these are SI figures)
     for data_config in eval_performance_data.index.get_level_values(0).unique():
         print(data_config)
         print("\n")
+        
+        
         # iterate over the model_config index in eval_performance_data
         eval_NSE = pd.DataFrame(columns = eval_performance_data.index.get_level_values(1).unique(), 
                         index = eval_performance_data.index.get_level_values(2).unique())
@@ -354,21 +383,37 @@ if dataset == "usgs":
         #cdf_axis.plot(eval_NSE['final'].quantile(0.25,interpolation='nearest'),0.25,marker='o',color='black',markersize=10)
 
         # which site_id has the maximum value for the 'final' column in eval_NSE?
-        max_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(1.0,interpolation='nearest')].dropna(how='all')
+        max_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(1.0,interpolation=quantile_interp_method)].dropna(how='all')
         max_NSE.loc[max_NSE.index[0],'final_config'] = eval_NSE.loc[max_NSE.index[0],'final_config'] # this shouldn't be necessary. not sure what's goign on in the previous line
         print("Site with maximum NSE: ")
         print(max_NSE)
+        '''
+        # find the evaluatoin mean absolute error (MAE) and root mean square error (RMSE) for the site with the maximum NSE
+        max_NSE_MAE = eval_performance_data.loc[data_config,max_NSE['final_config'][0],max_NSE.index[0]]['MAE']
+        max_NSE_RMSE = eval_performance_data.loc[data_config,max_NSE['final_config'][0],max_NSE.index[0]]['RMSE']
+        if "stage" in data_config:
+            max_NSE_RMSE = max_NSE_RMSE * 0.3048 # convert from feet to meters
+            max_NSE_MAE = max_NSE_MAE * 0.3048
+        elif "discharge" in data_config: # convert cubic feet per second to cubic meters per second
+            max_NSE_RMSE = max_NSE_RMSE * 0.0283168
+            max_NSE_MAE = max_NSE_MAE * 0.0283168  
+        else: # throw an exception if the data_config is not recognized
+            raise Exception("data_config not recognized")
+        '''
         # which site_id has the median value for the 'final' column in eval_NSE?
-        median_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(0.5,interpolation='nearest')].dropna(how='all')
+        median_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(0.5,interpolation=quantile_interp_method)].dropna(how='all')
         median_NSE.loc[median_NSE.index[0],'final_config'] = eval_NSE.loc[median_NSE.index[0],'final_config']
         print("Site with median NSE: ")
         print(median_NSE)
         # which site_id has the 25th percentile value for the 'final' column in eval_NSE?
-        quartile_one_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(0.25,interpolation='lower')].dropna(how='all')
+        quartile_one_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(0.25,interpolation=quantile_interp_method)].dropna(how='all')
         quartile_one_NSE.loc[quartile_one_NSE.index[0],'final_config'] = eval_NSE.loc[quartile_one_NSE.index[0],'final_config']
         print("Site with 25th percentile NSE: ")
         print(quartile_one_NSE)
-        
+
+        if data_config == 'discharge':
+            print("data config discharge wo rain gage")
+
         # including the already rendered visualizations into the plot as images
         # this can be cleaned up in inkscape later, but it should be clear enough what's going on
         max_NSE_image_file = folder_path  + str(max_NSE.index[0]) + "/" + str(data_config) + "/" + str(max_NSE['final_config'][0]) + "/eval_viz.png"
@@ -376,6 +421,8 @@ if dataset == "usgs":
         max_NSE_image = image.imread(max_NSE_image_file)
         max_NSE_axis.imshow(max_NSE_image)
         max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(max_NSE['final'][0]) ) ) ,fontsize='x-large')
+        # add the MAE and RMSE to the title
+        #max_NSE_axis.set_title(str('NSE = ' + str('{0:.2f}'.format(max_NSE['final'][0]) ) + "|MAE = " + str('{0:.2f}'.format(max_NSE_MAE) ) + "|RMSE = " + str('{0:.2f}'.format(max_NSE_RMSE) ) ) ,fontsize='large')
         # plot the same triangle in the upper left corner of the max_NSE_axis
         #max_NSE_axis.plot(0.1,0.9,marker='^',color='black',markersize=10)
 
@@ -396,8 +443,6 @@ if dataset == "usgs":
         # plot the same circle in the upper left corner of the quartile_one_NSE_axis
         #quartile_one_NSE_axis.plot(0.1,0.9,marker='o',color='black',markersize=10)
 
-        if data_config == 'stage_station_precip':
-            print("here")
     
         # save this figure as an svg and png image
         fig.savefig(folder_path + str(data_config) + "_nse_cdf_w_plots.svg" , format='svg' , dpi=600)
@@ -405,6 +450,43 @@ if dataset == "usgs":
         if show:
             plt.show()
         print("\n")
+        
+
+        if data_config == 'discharge': 
+            print('discharge')
+
+        eval_NSE['MAE'] = np.nan
+        eval_NSE['RMSE'] = np.nan
+        for site_id in eval_NSE.index:
+            final_model_config = eval_NSE.loc[site_id,'final_config']
+            try:
+                eval_NSE.loc[site_id,'MAE'] = eval_performance_data.loc[data_config,final_model_config,site_id]['MAE']
+                eval_NSE.loc[site_id,'RMSE'] = eval_performance_data.loc[data_config,final_model_config,site_id]['RMSE']
+            except Exception as e:
+                print(e)
+        
+        # convert units for MAE and RMSE
+        # if 'stage' in data_config, convert from feet to meters
+        # if 'discharge' in data_config, convert from cubic feet pers econd to cubic meters per second                
+        if 'stage' in data_config:
+            eval_NSE['MAE'] = eval_NSE['MAE'] * 0.3048
+            eval_NSE['RMSE'] = eval_NSE['RMSE'] * 0.3048
+            # rename the columns MAE and RMSE to reflect the change in units
+            eval_NSE = eval_NSE.rename(columns={'MAE':'MAE_meters','RMSE':'RMSE_meters'})
+        elif 'discharge' in data_config:
+            eval_NSE['MAE'] = eval_NSE['MAE'] * 0.0283168
+            eval_NSE['RMSE'] = eval_NSE['RMSE'] * 0.0283168
+            # rename the columns MAE and RMSE to reflect the change in units
+            eval_NSE = eval_NSE.rename(columns={'MAE':'MAE_cubic_meters_per_second','RMSE':'RMSE_cubic_meters_per_second'})
+        else:
+            raise Exception("data_config not recognized")
+
+        print(eval_NSE.describe())
+        # save the .describe() summary to a separate csv file with the suffix "summary"
+        eval_NSE.describe().to_csv(folder_path + str(data_config) + "_eval_summary.csv")
+        
+        # save eval_NSE to a csv file
+        eval_NSE.to_csv(folder_path + str(data_config) + "_eval_NSE.csv")
 
 
         # plot the correlation between final NSE and lenght of training period
@@ -417,6 +499,14 @@ if dataset == "usgs":
 
         eval_NSE = eval_NSE[eval_NSE['final'].notna()]
         eval_NSE = eval_NSE[eval_NSE['training_record_length_days'].notna()]
+        
+        # drop any outliers for the linear regression analysis (3 standard deviations below the mean for final NSE score)
+        eval_NSE = eval_NSE[eval_NSE['final'] > eval_NSE['final'].mean() - 3*eval_NSE['final'].std()]
+        # that didn't seem to work for stage, drop anything that's below -100 NSE as well
+        eval_NSE = eval_NSE[eval_NSE['final'] > -100]
+        # drop any models with training length below 2 years
+        eval_NSE = eval_NSE[eval_NSE['training_record_length_days'] > 730]
+
         # fit a linear regression between the columns 'final NSE' and 'training_record_length_days' within eval_NSE
         training_years = eval_NSE.training_record_length_days.values.astype(float) / 365.25
         nse = eval_NSE.final.values.astype(float)
@@ -438,8 +528,9 @@ if dataset == "usgs":
         fig.savefig(folder_path + str(data_config) + "_training_period_length_vs_final_NSE.png" , format='png' , dpi=600)
         fig.savefig(folder_path + str(data_config) + "_training_period_length_vs_final_NSE.svg" , format='svg' , dpi=600)
 
-        # save eval_NSE to a csv file
-        eval_NSE.to_csv(folder_path + str(data_config) + "_eval_NSE.csv")
+        
+
+
 
 
 elif dataset == 'DWL':
@@ -454,8 +545,9 @@ elif dataset == 'DWL':
     import pytz
     import datetime
 
-    creds = pd.read_csv("C:/rainfall_runoff_anywhere/dwl_creds.csv",sep='\t')
-
+    #creds = pd.read_csv("C:/rainfall_runoff_anywhere/dwl_creds.csv",sep=',')
+    creds = pd.read_csv("dwl_creds.csv",sep=',')
+    
     api_key = creds["api_key"][0]
     base_id = creds["base_id"][0]
     devices2_table = creds["devices2_table"][0]
@@ -532,7 +624,8 @@ elif dataset == 'DWL':
             else:
                 return s
 
-    folder_path = "C:/rainfall_runoff_anywhere/DWL"
+    #folder_path = "C:/rainfall_runoff_anywhere/DWL"
+    folder_path = "DWL"
     # look in the folder, find all the sites with trained models and run predictions for all of them
     trained_site_ids = list()
     # add all the immediate subdirectories of folderpath to a list of the trained site ids (do not include the subdirectories of the subdirectories)
@@ -856,4 +949,504 @@ elif dataset == 'DWL':
     if show:
         plt.show()
     print("\n")
+    
+    training_NSE['MAE'] = np.nan
+    training_NSE['RMSE'] = np.nan
+    for site_id in training_NSE.index:
+        max_by_site_config = training_NSE.loc[site_id,'max-config']
+        try:
+            training_NSE.loc[site_id,'MAE'] = training_performance_data.loc[max_by_site_config,site_id]['MAE']
+            training_NSE.loc[site_id,'RMSE'] = training_performance_data.loc[max_by_site_config,site_id]['RMSE']
+        except Exception as e:
+            print(e)
+        
+    # convert units for MAE and RMSE
+    training_NSE['MAE'] = training_NSE['MAE'] * 0.3048
+    training_NSE['RMSE'] = training_NSE['RMSE'] * 0.3048
+    # rename the columns MAE and RMSE to reflect the change in units
+    training_NSE = training_NSE.rename(columns={'MAE':'MAE_meters','RMSE':'RMSE_meters'})
+
+    print(training_NSE.describe())
+    # save the .describe() summary to a separate csv file with the suffix "summary"
+    training_NSE.describe().to_csv(folder_path + "/DWL_training_summary.csv")
+    
+    # save eval_NSE to a csv file
+    training_NSE.to_csv(folder_path + "/DWL_training_stats.csv")
+        
+
+
+
+elif dataset == 'GLWA':
+    
+    for subdir, dirs, files in os.walk(folder_path): 
+        #print(subdir)
+        if any([model_config in str(subdir) for model_config in model_configs]): # just sites that have been trained, not ones that have only been delineated
+            site_id_index = str(subdir).find(dataset) + len(dataset) + 1
+            site_id = str(subdir)[site_id_index:str(subdir).find("\\",site_id_index)]
+            #print(site_id)
+            time_config_index = str(subdir).find(site_id) + len(site_id) + 1
+            time_config = str(subdir)[time_config_index :str(subdir).find("\\",time_config_index) ]
+            #print(time_config)
+            target_config_index = str(subdir).find(time_config) + len(time_config) + 1
+            target_config = str(subdir)[target_config_index :str(subdir).find("\\",target_config_index)]
+            #print(target_config)
+            data_config_index = str(subdir).find(target_config) + len(target_config) + 1
+            data_config = str(subdir)[data_config_index :str(subdir).find("\\",data_config_index) ]
+            #print(data_config)
+            model_config_index = str(subdir).find(data_config) + len(data_config) + 1
+            model_config = str(subdir)[model_config_index : ]
+            #print(model_config)
+
+            for file in files:
+                if str( file) == "training_error_metrics.csv" :
+                    metrics = pd.read_csv(str(subdir + "/" + file))
+                    # drop the first column, which is just the index
+                    metrics = metrics.drop(metrics.columns[0],axis=1)
+                    # convert metrics to a dictionary, don't worry about the index
+                    metrics = metrics.to_dict(orient='list')
+                    for key in metrics:
+                        metrics[key] = metrics[key][0] # only one row in these files
+                    if 'training_performance_data' not in locals():
+                        training_performance_data = pd.DataFrame(index=pd.MultiIndex.from_product([time_configs, target_configs,data_configs,model_configs,[site_id]],
+                                                                                                  names = ["time_config","target_config","data_config","model_config","site_id"]),
+                                                                 columns = metrics.keys())
+
+                    training_performance_data.loc[time_config,target_config,data_config,model_config,site_id] = metrics
+
+                if str(file) == "eval_error_metrics.csv":
+                    metrics = pd.read_csv(str(subdir + "/" + file))
+                    # drop the first column, which is just the index
+                    metrics = metrics.drop(metrics.columns[0],axis=1)
+                    # convert metrics to a dictionary, don't worry about the index
+                    metrics = metrics.to_dict(orient='list')
+                    for key in metrics:
+                        metrics[key] = metrics[key][0]
+                    if 'eval_performance_data' not in locals():
+                        eval_performance_data = pd.DataFrame(index=pd.MultiIndex.from_product([time_configs,target_configs,data_configs,model_configs,[site_id]],
+                                                                                              names = ["time_config","target_config","data_config","model_config","site_id"]),
+                                                                 columns = metrics.keys())
+                    eval_performance_data.loc[time_config,target_config,data_config,model_config,site_id] = metrics
+
+    print("training")
+    print(training_performance_data)
+    print("eval")
+    print(eval_performance_data)
+    training_performance_data.to_csv(folder_path + "training_performance_data.csv")
+    eval_performance_data.to_csv(folder_path + "eval_performance_data.csv")
+
+    for col in training_performance_data.columns: # try to convert all the columns to numeric
+        training_performance_data[col] = pd.to_numeric(training_performance_data[col],errors='ignore') # ignore errors because some columns are strings
+    for col in eval_performance_data.columns: # try to convert all the columns to numeric
+        eval_performance_data[col] = pd.to_numeric(eval_performance_data[col],errors='ignore') # ignore errors because some columns are strings
+        
+    # make a new column which is the sum of "training_time_minutes" across model_config for a given data_config and site_id
+    training_performance_data['total_training_time_hours'] = np.nan
+    for time_config in training_performance_data.index.get_level_values(0).unique():
+        for target_config in training_performance_data.index.get_level_values(1).unique():
+            for data_config in training_performance_data.index.get_level_values(2).unique():
+                for site_id in training_performance_data.index.get_level_values(4).unique():
+                    success = False
+                    # if at least one of the entries in the slice is not nan, then we can sum the training times
+                    if not training_performance_data.loc[time_config,target_config,data_config,:,site_id]['training_time_minutes'].isnull().all():
+                        total_time = np.nansum(training_performance_data.loc[time_config,target_config,data_config,:,site_id]['training_time_minutes'])
+                    else:
+                        continue
+                    for model_config in training_performance_data.index.get_level_values(3).unique():
+                        try:
+                            if not success: # only want to record this once per site such that the statistics are correct
+                                training_performance_data.loc[(time_config,target_config,data_config,model_config,site_id),'total_training_time_hours'] = total_time / 60.0
+                                success = True
+                        except:
+                            pass
+
+    print("Training Performance Data statistics")
+    print(training_performance_data.describe())
+    print("\n")
+    print("Evaluation Performance Data statistics")
+    print(eval_performance_data.describe())
+
+
+    # create figure 3
+    for time_config in time_configs:
+        for target_config in target_configs:
+            # going to look at "meteostat_only" and "rain_gage_and_meteostat"
+            print(target_config)
+            print("\n")
+            
+            # iterate over the model_config index in eval_performance_data
+            w_eval_NSE = pd.DataFrame(columns = model_configs, 
+                            index = eval_performance_data.index.get_level_values(4).unique())
+            w_training_NSE = pd.DataFrame(columns = model_configs,
+                            index = eval_performance_data.index.get_level_values(4).unique())
+            wo_eval_NSE = pd.DataFrame(columns = model_configs, 
+                            index = eval_performance_data.index.get_level_values(4).unique())
+            wo_training_NSE = pd.DataFrame(columns = model_configs,
+                            index = eval_performance_data.index.get_level_values(4).unique())
+
+            for model_config in model_configs:
+                # iterate over the site_id index in eval_performance_data
+                for site_id in eval_performance_data.index.get_level_values(4).unique():
+                    try:
+                        w_eval_NSE.loc[site_id,model_config] = eval_performance_data.loc[time_config,target_config,"rain_gage_and_meteostat",model_config,site_id]['NSE']
+                        w_training_NSE.loc[site_id,model_config] = training_performance_data.loc[time_config,target_config,"rain_gage_and_meteostat",model_config,site_id]['NSE']
+                        wo_eval_NSE.loc[site_id,model_config] = eval_performance_data.loc[time_config,target_config,"meteostat_only",model_config,site_id]['NSE']
+                        wo_training_NSE.loc[site_id,model_config] = training_performance_data.loc[time_config,target_config,"meteostat_only",model_config,site_id]['NSE']
+                    except:
+                        pass
+        
+            # drop any rows which are only na in training_NSE and eval_NSE
+            #w_eval_NSE = w_eval_NSE.dropna(how='all')
+            #w_training_NSE = w_training_NSE.dropna(how='all')
+            #wo_eval_NSE = wo_eval_NSE.dropna(how='all')
+            #wo_training_NSE = wo_training_NSE.dropna(how='all')
+            # make the indices of w_eval_NSE and wo_eval_NSE the intersection of their individual indicies
+            w_eval_NSE = w_eval_NSE.loc[w_eval_NSE.index.intersection(wo_eval_NSE.index)]
+            wo_eval_NSE = wo_eval_NSE.loc[wo_eval_NSE.index.intersection(w_eval_NSE.index)]
+            w_training_NSE = w_training_NSE.loc[w_training_NSE.index.intersection(wo_training_NSE.index)]
+            wo_training_NSE = wo_training_NSE.loc[wo_training_NSE.index.intersection(w_training_NSE.index)]
+        
+        
+
+       
+            # create a new empty column in eval_NSE
+            w_eval_NSE['final'] = np.nan
+            w_eval_NSE['final_config'] = np.nan
+            wo_eval_NSE['final'] = np.nan
+            wo_eval_NSE['final_config'] = np.nan
+            for model_config in model_configs:
+                # iterate over the site_id index in eval_performance_data
+                for site_id in wo_training_NSE.index:
+                    # save 'final' in eval_NSE as the NSE for the model_config that has the highest training NSE (without station precip)
+                    if wo_training_NSE.loc[site_id,model_config] == max(wo_training_NSE.loc[site_id]):
+                        w_eval_NSE.loc[site_id,'final'] = w_eval_NSE.loc[site_id,model_config]
+                        w_eval_NSE.loc[site_id,'final_config'] = str(model_config)
+                        wo_eval_NSE.loc[site_id,'final'] = wo_eval_NSE.loc[site_id,model_config]
+                        wo_eval_NSE.loc[site_id,'final_config'] = str(model_config)
+
+            # drop any rows which are only na in training_NSE and eval_NSE
+            w_eval_NSE = w_eval_NSE.dropna(how='all')
+            w_training_NSE = w_training_NSE.dropna(how='all')
+            wo_eval_NSE = wo_eval_NSE.dropna(how='all')
+            wo_training_NSE = wo_training_NSE.dropna(how='all')
+            print("Training NSE values w precip")
+            print(w_training_NSE)
+            print("Evaluation NSE values w precip")
+            print(w_eval_NSE)
+            print("Training NSE values wo precip")
+            print(wo_training_NSE)
+            print("Evaluation NSE values wo precip")
+            print(wo_eval_NSE)
+
+            fig = plt.figure(figsize=(12,6))
+            gs = GridSpec(3, 7)
+            cdf_axis = plt.subplot(gs[0:3, 2:5])
+            wo_max_NSE_axis = plt.subplot(gs[0, 0:2])
+            wo_median_NSE_axis = plt.subplot(gs[1, 0:2])
+            wo_quartile_one_NSE_axis = plt.subplot(gs[2, 0:2])
+            w_max_NSE_axis = plt.subplot(gs[0,5:7])
+            w_median_NSE_axis = plt.subplot(gs[1,5:7])
+            w_quartile_one_NSE_axis = plt.subplot(gs[2,5:7])
+
+            # get rid of all the spines and ticks on max_NSE_axis, median_NSE_axis, and quartile_one_NSE_axis
+            for ax in [wo_max_NSE_axis,wo_median_NSE_axis,wo_quartile_one_NSE_axis,w_max_NSE_axis,w_median_NSE_axis,w_quartile_one_NSE_axis]:
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.spines['bottom'].set_visible(False)
+                ax.spines['left'].set_visible(False)
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+            cdf_axis.plot(np.sort(w_eval_NSE['final'].dropna()) , np.linspace(0,1,len(w_eval_NSE['final'].dropna()) , endpoint=True) , label='with Rain Gage' )
+            cdf_axis.plot(np.sort(wo_eval_NSE['final'].dropna()) , np.linspace(0,1,len(wo_eval_NSE['final'].dropna()) , endpoint=True) , label='without Rain Gage' )
+            cdf_axis.set_xlim(min(0,wo_eval_NSE['final'].quantile(0.25,interpolation='lower') ) , 1  )
+            cdf_axis.set_ylim(0,1)
+            cdf_axis.grid(True,alpha=0.2)
+            handles, labels = cdf_axis.get_legend_handles_labels()
+            #cdf_axis.legend(handles[::-1], labels[::-1], loc='upper left',fontsize='xx-large')
+            cdf_axis.legend(loc='upper left',fontsize='xx-large')
+            cdf_axis.set_xlabel('Nash-Sutcliffe Efficiency', fontsize='xx-large')
+            cdf_axis.set_ylabel('Cumulative Density', fontsize='xx-large')
+            cdf_axis.set_title(str(target_config + "\n# of sites = " + str(len(w_eval_NSE.index)) ) , fontsize='xx-large')
+
+
+            # which site_id has the maximum value for the 'final' column in wo_eval_NSE?
+            wo_max_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(1.0,interpolation='nearest')].dropna(how='all')
+            wo_max_NSE.loc[wo_max_NSE.index[0],'final_config'] = wo_eval_NSE.loc[wo_max_NSE.index[0],'final_config'] # this shouldn't be necessary. not sure what's goign on in the previous line
+            print("Site with maximum NSE: ")
+            print(wo_max_NSE)
+
+            w_max_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(1.0,interpolation='nearest')].dropna(how='all')
+            try:
+                w_max_NSE.loc[w_max_NSE.index[0],'final_config'] = w_eval_NSE.loc[w_max_NSE.index[0],'final_config'] # this shouldn't be necessary. not sure what's goign on in the previous line
+                print(w_max_NSE)
+            except:
+                print("simulation w rain gages diverged")
+
+            # which site_id has the median value for the 'final' column in wo_eval_NSE?
+            wo_median_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.5,interpolation='nearest')].dropna(how='all')
+            wo_median_NSE.loc[wo_median_NSE.index[0],'final_config'] = wo_eval_NSE.loc[wo_median_NSE.index[0],'final_config']
+            print("Site with median NSE: ")
+            print(wo_median_NSE)
+
+            w_median_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.5,interpolation='nearest')].dropna(how='all')
+            try:
+                w_median_NSE.loc[w_median_NSE.index[0],'final_config'] = wo_eval_NSE.loc[w_median_NSE.index[0],'final_config']
+                print(w_median_NSE)
+            except:
+                print("simulation w rain gages diverged")
+            
+     
+            # which site_id has the 25th percentile value for the 'final' column in wo_eval_NSE?
+            wo_quartile_one_NSE = wo_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.25,interpolation='nearest')].dropna(how='all')
+            wo_quartile_one_NSE.loc[wo_quartile_one_NSE.index[0],'final_config'] = wo_eval_NSE.loc[wo_quartile_one_NSE.index[0],'final_config']
+            print("Site with 25th percentile NSE: ")
+            print(wo_quartile_one_NSE)
+           
+            w_quartile_one_NSE = w_eval_NSE[wo_eval_NSE == wo_eval_NSE['final'].quantile(0.25,interpolation='nearest')].dropna(how='all')
+            try:
+                w_quartile_one_NSE.loc[w_quartile_one_NSE.index[0],'final_config'] = w_eval_NSE.loc[w_quartile_one_NSE.index[0],'final_config']
+                print(w_quartile_one_NSE)
+            except:
+                print("simulation w rain gages diverged")
+        
+            # including the already rendered visualizations into the plot as images
+            # this can be cleaned up in inkscape later, but it should be clear enough what's going on
+            # data_configs = ['rain_gage_only','meteostat_only','rain_gage_and_meteostat']
+            wo_max_NSE_image_file = folder_path  + str(wo_max_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str('meteostat_only') + "/" + str(wo_max_NSE['final_config'][0]) + "/eval_viz.png"
+            print(wo_max_NSE_image_file)
+            wo_max_NSE_image = image.imread(wo_max_NSE_image_file)
+            wo_max_NSE_axis.imshow(wo_max_NSE_image)
+            wo_max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(wo_max_NSE['final'][0]) ) ) ,fontsize='x-large')
+            try:
+                w_max_NSE_image_file = folder_path  + str(w_max_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str('rain_gage_and_meteostat') + "/" + str(w_max_NSE['final_config'][0]) + "/eval_viz.png"
+                print(w_max_NSE_image_file)
+                w_max_NSE_image = image.imread(w_max_NSE_image_file)
+                w_max_NSE_axis.imshow(w_max_NSE_image)
+                w_max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(w_max_NSE['final'][0]) ) ) ,fontsize='x-large')
+            except:
+                print("simulation w rain gages diverged")
+            
+            # plot the same triangle in the upper left corner of the max_NSE_axis
+            #max_NSE_axis.plot(0.1,0.9,marker='^',color='black',markersize=10)
+
+            # do the same for median and quartile one
+            wo_median_NSE_image_file = folder_path  + str(wo_median_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str('meteostat_only') + "/" + str(wo_median_NSE['final_config'][0]) + "/eval_viz.png"
+            print(wo_median_NSE_image_file)
+            wo_median_NSE_image = image.imread(wo_median_NSE_image_file)
+            wo_median_NSE_axis.imshow(wo_median_NSE_image)
+            wo_median_NSE_axis.set_title(str('Median NSE = ' + str('{0:.2f}'.format(wo_median_NSE['final'][0]) ) ) ,fontsize='x-large')
+            
+            try:
+                w_median_NSE_image_file = folder_path  + str(w_median_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str('rain_gage_and_meteostat') + "/" + str(w_median_NSE['final_config'][0]) + "/eval_viz.png"
+                print(w_median_NSE_image_file)
+                w_median_NSE_image = image.imread(w_median_NSE_image_file)
+                w_median_NSE_axis.imshow(w_median_NSE_image)
+                w_median_NSE_axis.set_title(str('Median NSE = ' + str('{0:.2f}'.format(w_median_NSE['final'][0]) ) ) ,fontsize='x-large')
+            except:
+                print("simulation w rain gages diverged")
+
+            # plot the same square in the upper left corner of the median_NSE_axis
+            #median_NSE_axis.plot(0.1,0.9,marker='s',color='black',markersize=10)
+
+            wo_quartile_one_NSE_image_file = folder_path  + str(wo_quartile_one_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str('meteostat_only') + "/" + str(wo_quartile_one_NSE['final_config'][0]) + "/eval_viz.png"
+            print(wo_quartile_one_NSE_image_file)
+            wo_quartile_one_NSE_image = image.imread(wo_quartile_one_NSE_image_file)
+            wo_quartile_one_NSE_axis.imshow(wo_quartile_one_NSE_image)
+            wo_quartile_one_NSE_axis.set_title(str('25th percentile NSE = ' + str('{0:.2f}'.format(wo_quartile_one_NSE['final'][0]) ) ) ,fontsize='x-large')
+            # plot the same circle in the upper left corner of the quartile_one_NSE_axis
+            #quartile_one_NSE_axis.plot(0.1,0.9,marker='o',color='black',markersize=10)
+            try:
+                w_quartile_one_NSE_image_file = folder_path  + str(w_quartile_one_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str('rain_gage_and_meteostat') + "/" + str(w_quartile_one_NSE['final_config'][0]) + "/eval_viz.png"
+                print(w_quartile_one_NSE_image_file)
+                w_quartile_one_NSE_image = image.imread(w_quartile_one_NSE_image_file)
+                w_quartile_one_NSE_axis.imshow(w_quartile_one_NSE_image)
+                w_quartile_one_NSE_axis.set_title(str('25th percentile NSE = ' + str('{0:.2f}'.format(w_quartile_one_NSE['final'][0]) ) ) ,fontsize='x-large')
+            except:
+                print("simulation w rain gages diverged")
+    
+            plt.tight_layout()
+            # save this figure as an svg and png image
+            fig.savefig(folder_path + str(time_config) + "_" + str(target_config) + "_effect_of_rain_gage.svg" , format='svg' , dpi=600)
+            fig.savefig(folder_path + str(time_config) + "_" + str(target_config) + "_effect_of_rain_gage.png" , format='png' , dpi=600)
+            if show:
+                plt.show()
+            print("\n")
+            plt.close('all')
+    
+
+
+
+    # creating a summary figure for each data_config, time_config, and target_config (SI figures)
+    for time_config in eval_performance_data.index.get_level_values(0).unique():
+        print(time_config)
+        for target_config in eval_performance_data.index.get_level_values(1).unique():
+            print(target_config)
+            for data_config in eval_performance_data.index.get_level_values(2).unique():
+                print(data_config)
+        
+                print("\n")
+                # iterate over the model_config index in eval_performance_data
+                eval_NSE = pd.DataFrame(columns = eval_performance_data.index.get_level_values(-2).unique(), 
+                                index = eval_performance_data.index.get_level_values(-1).unique())
+                training_NSE = pd.DataFrame(columns = eval_performance_data.index.get_level_values(-2).unique(),
+                                index = eval_performance_data.index.get_level_values(-1).unique())
+
+                for model_config in eval_performance_data.index.get_level_values(-2).unique():
+                    # iterate over the site_id index in eval_performance_data
+                    for site_id in eval_performance_data.index.get_level_values(-1).unique():
+                        try:
+                            eval_NSE.loc[site_id,model_config] = eval_performance_data.loc[time_config,target_config,data_config,model_config,site_id]['NSE']
+                            training_NSE.loc[site_id,model_config] = training_performance_data.loc[time_config,target_config,data_config,model_config,site_id]['NSE']
+                        except Exception as e:
+                            print(e)
+                            pass # not every combination is available (some sites don't have discharge or station precip)
+
+                # create a new empty column in eval_NSE
+                eval_NSE['final'] = np.nan
+                eval_NSE['final_config'] = np.nan
+                for model_config in eval_performance_data.index.get_level_values(-2).unique():
+                    # iterate over the site_id index in eval_performance_data
+                    for site_id in eval_performance_data.index.get_level_values(-1).unique():
+                        # save 'final' in eval_NSE as the NSE for the model_config that has the highest training NSE
+                        if training_NSE.loc[site_id,model_config] == max(training_NSE.loc[site_id]):
+                            eval_NSE.loc[site_id,'final'] = eval_NSE.loc[site_id,model_config]
+                            eval_NSE.loc[site_id,'final_config'] = str(model_config)
+
+                # drop any rows which are only na in training_NSE and eval_NSE
+                eval_NSE = eval_NSE.dropna(how='all')
+                training_NSE = training_NSE.dropna(how='all')
+                print("Training NSE values")
+                print(training_NSE)
+                print("Evaluation NSE values")
+                print(eval_NSE)
+
+                if eval_NSE.empty or training_NSE.empty:
+                    print("no evaluations for this data config. skip.")
+                    continue # no evaluations for this data_config
+             
+
+                fig = plt.figure(figsize=(12,9))
+                gs = GridSpec(3, 5)
+                cdf_axis = plt.subplot(gs[0:3, 0:3])
+                max_NSE_axis = plt.subplot(gs[0, 3:5])
+                median_NSE_axis = plt.subplot(gs[1, 3:5])
+                quartile_one_NSE_axis = plt.subplot(gs[2, 3:5])
+                # get rid of all the spines and ticks on max_NSE_axis, median_NSE_axis, and quartile_one_NSE_axis
+                for ax in [max_NSE_axis,median_NSE_axis,quartile_one_NSE_axis]:
+                    ax.spines['top'].set_visible(False)
+                    ax.spines['right'].set_visible(False)
+                    ax.spines['bottom'].set_visible(False)
+                    ax.spines['left'].set_visible(False)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+
+                for col in eval_NSE.columns:
+                    if col != 'final_config':
+                        cdf_axis.plot(np.sort(eval_NSE[col].dropna()) , np.linspace(0,1,len(eval_NSE[col].dropna()) , endpoint=True) , label=col )
+
+                cdf_axis.set_xlim(min(0,eval_NSE['final'].quantile(0.25,interpolation='nearest') ) , 1  )
+                cdf_axis.set_ylim(0,1)
+                cdf_axis.grid(True,alpha=0.2)
+                handles, labels = cdf_axis.get_legend_handles_labels()
+                #cdf_axis.legend(handles[::-1], labels[::-1], loc='upper left',fontsize='xx-large')
+                cdf_axis.legend(loc='upper left',fontsize='xx-large')
+                cdf_axis.set_xlabel('Nash-Sutcliffe Efficiency', fontsize='xx-large')
+                cdf_axis.set_ylabel('Cumulative Density', fontsize='xx-large')
+                cdf_axis.set_title(str(data_config + "\n" + time_config + " | " + target_config + "\n# of sites = " + str(len(eval_NSE.index))), fontsize='xx-large')
+                # add a triangle marker at the maximum NSE on the "final" line
+                #cdf_axis.plot(eval_NSE['final'].quantile(1.0,interpolation='nearest'),0.99,marker='^',color='black',markersize=10)
+                # add a square marker at the median NSE on the "final" line
+                #cdf_axis.plot(eval_NSE['final'].quantile(0.5,interpolation='nearest'),0.5,marker='s',color='black',markersize=10)
+                # add a circle marker at the 25th percentile NSE on the "final" line
+                #cdf_axis.plot(eval_NSE['final'].quantile(0.25,interpolation='nearest'),0.25,marker='o',color='black',markersize=10)
+
+                # which site_id has the maximum value for the 'final' column in eval_NSE?
+                max_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(1.0,interpolation='nearest')].dropna(how='all')
+                max_NSE.loc[max_NSE.index[0],'final_config'] = eval_NSE.loc[max_NSE.index[0],'final_config'] # this shouldn't be necessary. not sure what's goign on in the previous line
+                print("Site with maximum NSE: ")
+                print(max_NSE)
+                # which site_id has the median value for the 'final' column in eval_NSE?
+                median_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(0.5,interpolation='nearest')].dropna(how='all')
+                median_NSE.loc[median_NSE.index[0],'final_config'] = eval_NSE.loc[median_NSE.index[0],'final_config']
+                print("Site with median NSE: ")
+                print(median_NSE)
+                # which site_id has the 25th percentile value for the 'final' column in eval_NSE?
+                quartile_one_NSE = eval_NSE[eval_NSE == eval_NSE['final'].quantile(0.25,interpolation='nearest')].dropna(how='all')
+                quartile_one_NSE.loc[quartile_one_NSE.index[0],'final_config'] = eval_NSE.loc[quartile_one_NSE.index[0],'final_config']
+                print("Site with 25th percentile NSE: ")
+                print(quartile_one_NSE)
+                
+                if time_config == "hourly" and target_config == "flow" and data_config == "rain_gage_and_meteostat":
+                    print("here")
+        
+                # including the already rendered visualizations into the plot as images
+                # this can be cleaned up in inkscape later, but it should be clear enough what's going on
+                max_NSE_image_file = folder_path  + str(max_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str(data_config) + "/" + str(max_NSE['final_config'][0]) + "/eval_viz.png"
+                print(max_NSE_image_file)
+                max_NSE_image = image.imread(max_NSE_image_file)
+                max_NSE_axis.imshow(max_NSE_image)
+                max_NSE_axis.set_title(str('Max NSE = ' + str('{0:.2f}'.format(max_NSE['final'][0]) ) ) ,fontsize='x-large')
+                # plot the same triangle in the upper left corner of the max_NSE_axis
+                #max_NSE_axis.plot(0.1,0.9,marker='^',color='black',markersize=10)
+
+                # do the same for median and quartile one
+                median_NSE_image_file = folder_path + str(median_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str(data_config) + "/" + str(median_NSE['final_config'][0]) + "/eval_viz.png"
+                print(median_NSE_image_file)
+                median_NSE_image = image.imread(median_NSE_image_file)
+                median_NSE_axis.imshow(median_NSE_image)
+                median_NSE_axis.set_title(str('Median NSE = ' + str('{0:.2f}'.format(median_NSE['final'][0]) ) ) ,fontsize='x-large')
+                # plot the same square in the upper left corner of the median_NSE_axis
+                #median_NSE_axis.plot(0.1,0.9,marker='s',color='black',markersize=10)
+
+                quartile_one_NSE_image_file = folder_path + str(quartile_one_NSE.index[0]) + "/" + str(time_config) + "/" + str(target_config) + "/" + str(data_config) + "/" + str(quartile_one_NSE['final_config'][0]) + "/eval_viz.png"
+                print(quartile_one_NSE_image_file)
+                quartile_one_NSE_image = image.imread(quartile_one_NSE_image_file)
+                quartile_one_NSE_axis.imshow(quartile_one_NSE_image)
+                quartile_one_NSE_axis.set_title(str('25th percentile NSE = ' + str('{0:.2f}'.format(quartile_one_NSE['final'][0]) ) ) ,fontsize='x-large')
+                # plot the same circle in the upper left corner of the quartile_one_NSE_axis
+                #quartile_one_NSE_axis.plot(0.1,0.9,marker='o',color='black',markersize=10)
+                if time_config == 'train_last' and target_config == 'flow' and data_config =='rain_gage_and_meteostat':
+                    print("here")
+
+                # save this figure as an svg and png image
+                fig.savefig(folder_path + str(time_config) + "_" + str(target_config) + "_" + str(data_config) + "_nse_cdf_w_plots.svg" , format='svg' , dpi=600)
+                fig.savefig(folder_path + str(time_config) + "_" + str(target_config) + "_" + str(data_config) + "_nse_cdf_w_plots.png" , format='png' , dpi=600)
+                if show:
+                    plt.show(block=True)
+                print("\n")
+                plt.close('all')
+                
+                eval_NSE['MAE'] = np.nan
+                eval_NSE['RMSE'] = np.nan
+                for site_id in eval_NSE.index:
+                    final_model_config = eval_NSE.loc[site_id,'final_config']
+                    try:
+                        eval_NSE.loc[site_id,'MAE'] = eval_performance_data.loc[time_config,target_config,data_config,final_model_config,site_id]['MAE']
+                        eval_NSE.loc[site_id,'RMSE'] = eval_performance_data.loc[time_config,target_config,data_config,final_model_config,site_id]['RMSE']
+                    except Exception as e:
+                        print(e)
+        
+                # convert units for MAE and RMSE            
+                if 'depth' in target_config:
+                    eval_NSE['MAE'] = eval_NSE['MAE'] * 0.3048
+                    eval_NSE['RMSE'] = eval_NSE['RMSE'] * 0.3048
+                    # rename the columns MAE and RMSE to reflect the change in units
+                    eval_NSE = eval_NSE.rename(columns={'MAE':'MAE_meters','RMSE':'RMSE_meters'})
+                elif 'flow' in target_config:
+                    eval_NSE['MAE'] = eval_NSE['MAE'] * 0.0283168
+                    eval_NSE['RMSE'] = eval_NSE['RMSE'] * 0.0283168
+                    # rename the columns MAE and RMSE to reflect the change in units
+                    eval_NSE = eval_NSE.rename(columns={'MAE':'MAE_cubic_meters_per_second','RMSE':'RMSE_cubic_meters_per_second'})
+                else:
+                    raise Exception("data_config not recognized")
+
+                print(eval_NSE.describe())
+                # save the .describe() summary to a separate csv file with the suffix "summary"
+                eval_NSE.describe().to_csv(folder_path + str(time_config) + "_" + str(target_config) + "_" + str(data_config) + "_eval_summary.csv")
+
+
+else: 
+    print("dataset not recongized. exiting.")
+    exit(1)
+                
 

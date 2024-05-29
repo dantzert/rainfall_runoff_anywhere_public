@@ -3,9 +3,12 @@ import re
 import dill as pickle
 import pandas as pd
 import sys
-sys.path.append("G:/My Drive/modpods")
+import os
+parent_dir = os.path.dirname(os.getcwd())
+sys.path.append(parent_dir)
+sys.path.append(str(parent_dir + '/rainfall_runoff_anywhere'))
+sys.path.append(str(parent_dir + '/modpods'))
 import modpods
-sys.path.append("G:/My Drive/rainfall_runoff_anywhere")
 import rainfall_runoff_anywhere
 import os
 from influxdb import InfluxDBClient
@@ -17,7 +20,8 @@ from pyairtable.formulas import match
 
 
 # airtable tokens, saved as a csv file that's added to the .gitignore
-creds = pd.read_csv("filepath_to_creds.csv",sep='\t')
+#creds = pd.read_csv("G:/My Drive/rainfall_runoff_anywhere/dwl_creds.csv",sep='\t')
+creds = pd.read_csv("dwl_creds.csv",sep='\t')
 #print(creds)
 api_key = creds["api_key"][0]
 base_id = creds["base_id"][0]

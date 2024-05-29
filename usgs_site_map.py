@@ -11,8 +11,8 @@ show = False
 
 pd.set_option("display.precision", 2)
 for data_config in ["stage","discharge","stage_station_precip","discharge_station_precip"]:
-    usgs_results = pd.read_csv(str("G:/My Drive/rainfall_runoff_anywhere/usgs/" + str(data_config) + "_eval_NSE.csv"),index_col=0)
-    
+    #usgs_results = pd.read_csv(str("G:/My Drive/rainfall_runoff_anywhere/usgs/" + str(data_config) + "_eval_NSE.csv"),index_col=0)
+    usgs_results = pd.read_csv(str("usgs/" + str(data_config) + "_eval_NSE.csv"),index_col=0)
     sites = usgs_results.index
     usgs_results['Latitude'] = np.nan
     usgs_results['Longitude'] = np.nan
@@ -50,6 +50,13 @@ for data_config in ["stage","discharge","stage_station_precip","discharge_statio
     gdf = gpd.GeoDataFrame(
     usgs_results, geometry=gpd.points_from_xy(usgs_results.Longitude, usgs_results.Latitude), crs='NAD83' )
 
+    # wherever NSE in gdf is less than -1, set it to -1
+    gdf.loc[gdf['final'] < -1, 'final'] = -1
+    # if any rows in gdf have nan values for 'final', drop them
+    gdf.dropna(subset=['final'], inplace=True)
+    print(gdf)
+
+
     gdf = gdf.to_crs(epsg=3857)
     # plot the sites
     ax = gdf.plot(figsize=(20,10))
@@ -61,9 +68,7 @@ for data_config in ["stage","discharge","stage_station_precip","discharge_statio
     
     # add a subtitle
     ax.text(0.0, 0.05, 'Stations with NSE < -1 are displayed as NSE = -1', horizontalalignment='left', transform=ax.transAxes, fontsize='x-large')
-    # wherever NSE in gdf is less than -1, set it to -1
-    gdf.loc[gdf['final'] < -1, 'final'] = -1
-
+    
     
     for x, y, label in zip(gdf.geometry.x, gdf.geometry.y, gdf.index):
         ax.annotate(label, xy=(x, y), xytext=(3, 3), textcoords="offset points", fontsize='small')
@@ -74,7 +79,7 @@ for data_config in ["stage","discharge","stage_station_precip","discharge_statio
     ax.scatter(gdf.geometry.x, gdf.geometry.y, c=gdf['final'], cmap='binary', s=marker_size, zorder=2)
     sm = plt.cm.ScalarMappable(cmap='binary', norm=plt.Normalize(vmin=gdf['final'].min(), vmax=gdf['final'].max()))
     sm._A = []
-    cbar = plt.colorbar(sm)
+    cbar = plt.colorbar(sm, ax=ax, orientation='vertical')
     cbar.set_label('NSE', rotation=270, labelpad=20)
     # add a legend
     #ax.legend(loc='lower right', title='NSE', frameon=False)
@@ -86,8 +91,10 @@ for data_config in ["stage","discharge","stage_station_precip","discharge_statio
 
     # save the figure
     
-    plt.savefig(str("G:/My Drive/rainfall_runoff_anywhere/usgs/" + str(data_config) + "_site_map.svg"), dpi=600)
-    plt.savefig(str("G:/My Drive/rainfall_runoff_anywhere/usgs/" + str(data_config) + "_site_map.png"), dpi=600)
+    #plt.savefig(str("G:/My Drive/rainfall_runoff_anywhere/usgs/" + str(data_config) + "_site_map.svg"), dpi=600)
+    #plt.savefig(str("G:/My Drive/rainfall_runoff_anywhere/usgs/" + str(data_config) + "_site_map.png"), dpi=600)
+    plt.savefig(str("usgs/" + str(data_config) + "_site_map.svg"), dpi=600)
+    plt.savefig(str("usgs/" + str(data_config) + "_site_map.png"), dpi=600)
     if show:
         plt.show()
     plt.close('all')

@@ -1,16 +1,18 @@
 # import modpods and other libraries
 import sys
-sys.path.append("C:/modpods")
+import os
+parent_dir = os.path.dirname(os.getcwd())
+sys.path.append(parent_dir)
+sys.path.append(str(parent_dir + '/rainfall_runoff_anywhere'))
+sys.path.append(str(parent_dir + '/modpods'))
 import modpods
-sys.path.append("C:/rainfall_runoff_anywhere")
 import rainfall_runoff_anywhere
 #print(modpods)
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
-import os
 import matplotlib.pyplot as plt
-import pickle
+#import pickle
 import math
 import datetime
 import pandas as pd
@@ -35,8 +37,8 @@ import pytz
 
 
 # airtable and influx tokens, saved as a csv file that's added to the .gitignore
-creds = pd.read_csv("filepath_to_creds.csv",sep=',')
-
+#creds = pd.read_csv("C:/rainfall_runoff_anywhere/dwl_creds.csv",sep=',')
+creds = pd.read_csv("dwl_creds.csv",sep=',')
 api_key = creds["api_key"][0]
 base_id = creds["base_id"][0]
 devices2_table = creds["devices2_table"][0]
@@ -120,8 +122,8 @@ prediction_days = 7 # set to one day more than the maximum length forecast you'r
 
 windup_days = 90 # keep it the same for all sites for now
 windup_timesteps = int(24*windup_days)
-folder_path = "C:/rainfall_runoff_anywhere/DWL"
-
+#folder_path = "C:/rainfall_runoff_anywhere/DWL"
+folder_path = "DWL"
 # look in the folder, find all the sites with trained models and run predictions for all of them
 trained_site_ids = list()
 # add all the immediate subdirectories of folderpath to a list of the trained site ids (do not include the subdirectories of the subdirectories)
@@ -146,7 +148,11 @@ for site_id in trained_site_ids:
  
 
     # load the site_info file
-    site_info = pd.read_csv(folder_path + "/" + site_id + "/site_info.csv")
+    try:
+        site_info = pd.read_csv(folder_path + "/" + site_id + "/site_info.csv")
+    except:
+        print("no site info file for this site. skipping.")
+        continue
     print(site_info)
 
     site_folder_path = str(folder_path + "/" + site_id)
@@ -471,9 +477,9 @@ for site_id in trained_site_ids:
 
     # plot the data from validation start to prediction end
     data[['depth_ft','validation_sim','prediction_sim','high_pred_bound','low_pred_bound','high_pred_bound_tight','low_pred_bound_tight']][-24*2*prediction_days:].plot(subplots=False,legend=True)
-    plt.show(block=False) # this should look about the same as the grafana dashboard 
+    #plt.show(block=False) # this should look about the same as the grafana dashboard 
     # (some peaks will be different due to different timestep (10 min vs hourly))
-    plt.pause(10)
+    #plt.pause(10)
     plt.close('all')
 
     

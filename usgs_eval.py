@@ -1,19 +1,24 @@
 # import modpods and other libraries
+import warnings
+warnings.filterwarnings(action='ignore')
+warnings.filterwarnings(action='ignore',category=UserWarning)
 import sys
-sys.path.append("C:/modpods")
+import os
+parent_dir = os.path.dirname(os.getcwd())
+sys.path.append(parent_dir)
+sys.path.append(str(parent_dir + '/rainfall_runoff_anywhere'))
+sys.path.append(str(parent_dir + '/modpods'))
 import modpods
-sys.path.append("C:/rainfall_runoff_anywhere")
 import rainfall_runoff_anywhere
-#print(modpods)
+
 import numpy as np
-import pandas as pd
 import scipy.stats as stats
 import os
 import matplotlib.pyplot as plt
-import pickle
+#import pickle
 import math
 import datetime
-import pandas as pd
+#import pandas as pd
 import matplotlib.pyplot as plt   
 from matplotlib.colors import LogNorm
 import numpy as np
@@ -26,10 +31,11 @@ import time
 from matplotlib.gridspec import GridSpec
 import re
 
+import pandas as pd
 
 eval_years = 1 # one year is used for evaluation 
 max_years = 12 # max number of years of data to use for training, eval, and windup
-min_years = 3 # minimum number of years of data to use 
+min_years = 5 # minimum number of years of data to use 
 lookback_years = 15 #  how many years we'll look backwards to find the data
 windup_years = 1 # use the same value for all the USGS sites. 
 windup_timesteps = int(windup_years*365*24) # data will be hourly
@@ -43,16 +49,23 @@ max_transforms = 1 # this is the number of transformations *per input*, not tota
 pd.set_option('display.max_columns', None) # to display all the columns, comment out if you want to truncate
 
 # load sites from text file
-
-with open("C:/rainfall_runoff_anywhere/usgs_sites.txt",'r') as fp:
+with open("usgs_sites.txt",'r') as fp:
+#with open("C:/rainfall_runoff_anywhere/usgs_sites.txt",'r') as fp:
     sites = fp.read().splitlines()
 
 #print(sites)
 print("number of sites evaluated for inclusion: " + str(len(sites)))
 
+data_configs = ['discharge','stage','discharge_station_precip','stage_station_precip']
+#data_configs = ['stage_constrained_w_PET','stage_constrained','stage_orig'] # ABC test of new methods
+#data_configs = ['stage_orig'] # for debugging
+model_configs = ['poly1','poly2','poly3']
+#model_configs = ['poly1'] # for debugging
+
+#sites = ['08178000','03567340','05527800','02217274','02336986','02457595','02087322','06893300']
 
 
-for site_id in sites[13:]:
+for site_id in sites[20:]: 
     eval_end = datetime.datetime(month=6,day=1,year=2023,hour=0,minute=0,second=0) 
     train_start = (eval_end - datetime.timedelta(days=int(365*lookback_years))).date()
     print("\n" + str(site_id) + "\n")
@@ -76,9 +89,9 @@ for site_id in sites[13:]:
     site_name = meta.columns[0][5:]
     meta_string = meta[meta.columns[0]].str.cat(sep='\n')
     print(meta_string)
-    if ("Precipitation" not in meta_string or (("Gage" not in meta_string) and ("Discharge" not in meta_string)) ):
-        print("doesn't have both precip and one of (stage, discharge) at the station, skip")
-        continue
+    #if ("Precipitation" not in meta_string or (("Gage" not in meta_string) and ("Discharge" not in meta_string)) ):
+    #    print("doesn't have both precip and one of (stage, discharge) at the station, skip")
+    #    continue
     #print(meta)
     attempts = 0
     while attempts < 5: # we should not error here if the meta request worked
@@ -166,7 +179,8 @@ for site_id in sites[13:]:
     
 
     # fetch the forcing data based on sampling points (already saved) 
-    folder_path = str("C:/rainfall_runoff_anywhere/usgs/" + str(site_id))
+    folder_path = str("usgs/" + str(site_id))
+    #folder_path = str("C:/rainfall_runoff_anywhere/usgs/" + str(site_id))
     with open(str(folder_path + "/close_points.points") , 'rb') as fp:
         close_points = pickle.load(fp)
     with open(str(folder_path + "/mid_points.points") , 'rb') as fp:
@@ -181,7 +195,7 @@ for site_id in sites[13:]:
     try:
         weather = rainfall_runoff_anywhere.get_rainfall_and_snowmelt(close_points,mid_points, far_points, 
                                                                      train_start, eval_end, verbose=False,
-                                                                     tolerance_days = 30, use_models=True) # do i want to use weather models for this?
+                                                                     tolerance_days = 30, use_models=True) # need to use weather models in order to do predictions
     except Exception as e:
         print(e)
         print("no weather data for these criteria, skip")
@@ -192,27 +206,67 @@ for site_id in sites[13:]:
     surface_water_input = weather['surface_water_input']
     # localize the surface_water_input index to UTC
     surface_water_input = surface_water_input.tz_localize("UTC", ambiguous = 'NaT',nonexistent='NaT')
+    # set the first nonzero index to the last index of the data
+    first_nonzero_index = surface_water_input.index[-1]
     if 'close' in surface_water_input.columns:
         data['close_precip_mm'] = surface_water_input['close']
         data['close_precip_mm'].fillna(0,inplace=True)
+        # minimum of current value of first_nonzero_index and the first index where the data is nonzero
+        # find the first index where close_precip_mm is nonzero
+        try:
+            first_nonzero_index = min(first_nonzero_index,data.index[data['close_precip_mm'] > 0][0])
+        except: # drop that column as there's no data
+            surface_water_input.drop(columns='close',inplace=True)
+            data.drop(columns='close_precip_mm',inplace=True)
+            print("dropped close, no nonzero values")
     if 'mid' in surface_water_input.columns:
         data['mid_precip_mm'] = surface_water_input['mid']
         data['mid_precip_mm'].fillna(0,inplace=True)
+        try:
+            first_nonzero_index = min(first_nonzero_index,data.index[data['mid_precip_mm'] > 0][0])
+        except:
+            surface_water_input.drop(columns='mid',inplace=True)
+            data.drop(columns='mid_precip_mm',inplace=True)
+            print("dropped mid, no nonzero values")
     if 'far' in surface_water_input.columns:
         data['far_precip_mm'] = surface_water_input['far']
         data['far_precip_mm'].fillna(0,inplace=True)
+        try:
+            first_nonzero_index = min(first_nonzero_index,data.index[data['far_precip_mm'] > 0][0])
+        except:
+            surface_water_input.drop(columns='far',inplace=True)
+            data.drop(columns='far_precip_mm',inplace=True)
+            print("dropped far, no nonzero values")
     if 'snowmelt_nowind' in surface_water_input.columns:
         data['snowmelt_nowind'] = surface_water_input['snowmelt_nowind'] / 100 # units are depth*temp*windspeed for snowmelt, not too meaningful
         data['snowmelt_nowind'].fillna(0,inplace=True)
+        try:
+            first_nonzero_index = min(first_nonzero_index,data.index[data['snowmelt_nowind'] > 0][0])
+        except: # drop that column is there's no data
+            surface_water_input.drop(columns='snowmelt_nowind',inplace=True)
+            data.drop(columns='snowmelt_nowind',inplace=True)
+            print("dropped snowmelt_nowind (no nonzero values)")
     if 'snowmelt_wind' in surface_water_input.columns:
         data['snowmelt_wind'] = surface_water_input['snowmelt_wind'] / 1000 # scaling for visualizatoin (units aren't meaningful anyhow)
         data['snowmelt_wind'].fillna(0,inplace=True)
+        try:
+            first_nonzero_index = min(first_nonzero_index,data.index[data['snowmelt_wind'] > 0][0])
+        except: # drop that column is there's no data
+            surface_water_input.drop(columns='snowmelt_wind',inplace=True)
+            data.drop(columns='snowmelt_wind',inplace=True)
+            print("dropped snowmelt_wind (no nonzero values)")
+    if 'PET' in surface_water_input.columns:
+        data['PET'] = surface_water_input['PET']
+        data['PET'].fillna(0,inplace=True)
+        first_nonzero_index = min(first_nonzero_index,data.index[data['PET'] > 0][0])
 
+    # find the first index where one of the forcing columns is nonzero, start the data from there
+    data = data.loc[first_nonzero_index:]
+    
     print("length before dropna: " + str(len(data)))
     data = data.dropna(axis='index')
     print("length after dropna: " + str(len(data)))
     print("should not change")
-
 
     
 
@@ -236,6 +290,8 @@ for site_id in sites[13:]:
         data['snowmelt_wind'] = data['snowmelt_wind'].shift(-1)
     if 'station_precip_in' in data.columns:
         data['station_precip_in'] = data['station_precip_in'].shift(-1)
+    if 'PET' in data.columns:
+        data['PET'] = data['PET'].shift(-1)
     data = data.dropna(axis='index')
     print("after shifting")
     print(data)
@@ -291,9 +347,7 @@ for site_id in sites[13:]:
     # data_config: discharge, stage, discharge_station_precip, stage_station_precip
     # model_config: poly1, poly2, poly3
     
-    data_configs = ['discharge','stage','discharge_station_precip','stage_station_precip']
-    model_configs = ['poly1','poly2','poly3']
-    #model_configs = ['poly1'] # for debugging
+    
 
     for data_config in data_configs:
 
@@ -321,6 +375,14 @@ for site_id in sites[13:]:
             for col in data.columns:
                 if col != "discharge_cfs" and col != "stage_ft":
                     forcing_columns.append(col)
+        elif (data_config == 'stage_orig' and 'stage_ft' in data.columns 
+        or data_config == 'stage_constrained' and 'stage_ft' in data.columns 
+        or data_config == 'stage_constrained_w_PET' and 'stage_ft' in data.columns):
+            target_column = ['stage_ft']
+            forcing_columns = []
+            for col in data.columns:
+                if col != "station_precip_in" and col != "discharge_cfs" and col != "stage_ft":
+                    forcing_columns.append(col)
         else:
             print(data_config)
             print("invalid data configuration for this site. continuing to next config.")
@@ -339,10 +401,44 @@ for site_id in sites[13:]:
             start = time.perf_counter()
             print("training model for site " + str(site_id) + " with data configuration " + data_config + " and model configuration " + model_config)
             
+            if data_config != 'stage_constrained_w_PET':
+                # drop the PET column
+                try:
+                    data_train.drop(columns='PET',inplace=True)
+                    data_eval.drop(columns='PET',inplace=True)
+                except Exception as e:
+                    print(e)
+                try: 
+                    # remove PET from forcing_columns
+                    forcing_columns.remove('PET')
+                except Exception as e:
+                    print(e)
+            '''
+            if data_config == 'stage_orig':
+                forcing_coef_constraints = None
+            else:
+                # make a dictionary called "forcing_coef_constraints" that has keys "forcing_columns" and values 1, 0, or -1 correpsonding to pos, unconstrained, or negative
+                forcing_coef_constraints = dict()
+                for col in forcing_columns:
+                    if 'precip' in col or 'snowmelt' in col:
+                        forcing_coef_constraints[col] = 1
+                    elif 'PET' in col:
+                        forcing_coef_constraints[col] = -1
+                    else:
+                        forcing_coef_constraints[col] = 0    
+            '''
+            forcing_coef_constraints = dict()
+            for col in forcing_columns:
+                if 'precip' in col or 'snowmelt' in col:
+                    forcing_coef_constraints[col] = 1
+                elif 'PET' in col:
+                    forcing_coef_constraints[col] = -1
+                else:
+                    forcing_coef_constraints[col] = 0  
             try:
                 rainfall_runoff_model = modpods.delay_io_train(data_train,target_column,forcing_columns,windup_timesteps = windup_timesteps, 
                                                            init_transforms=1,max_transforms=max_transforms,max_iter=max_iter,
-                                                           poly_order = poly_order, verbose = False,bibo_stable=True)
+                                                           poly_order = poly_order, verbose = True,bibo_stable=True, forcing_coef_constraints=forcing_coef_constraints)
             except Exception as e:
                 print("error training model")
                 print(e)
@@ -350,8 +446,8 @@ for site_id in sites[13:]:
 
             end = time.perf_counter()
             training_time_minutes = (end-start)/60
-
-            results_folder_path =  str("C:/rainfall_runoff_anywhere/usgs/" + str(site_id) + "/" + str(data_config) + "/" + str(model_config) + "/")
+            results_folder_path = str("usgs/" + str(site_id) + "/" + str(data_config) + "/" + str(model_config) + "/")
+            #results_folder_path =  str("C:/rainfall_runoff_anywhere/usgs/" + str(site_id) + "/" + str(data_config) + "/" + str(model_config) + "/")
             if not os.path.exists(results_folder_path):
                 os.makedirs(results_folder_path)
             with open(str(results_folder_path + "model.pkl"),'wb') as f:
@@ -375,6 +471,13 @@ for site_id in sites[13:]:
             elif data_config == 'stage' or data_config == 'stage_station_precip':
                 ax.plot(data_train.index[windup_timesteps+1:],rainfall_runoff_model[1]['final_model']['response']['stage_ft'][windup_timesteps+1:],label='observed')
                 if (not rainfall_runoff_model[1]['final_model']['diverged']): # simulation didn't diverge, so the simulated data is valid
+                    try:
+                        ax.plot(data_train.index[windup_timesteps+1:],rainfall_runoff_model[1]['final_model']['simulated'][:,0],label='simulated')
+                    except Exception as e:
+                        print(e)
+            else: # ABC testing for constraining rainfall and including PET
+                ax.plot(data_train.index[windup_timesteps+1:],rainfall_runoff_model[1]['final_model']['response']['stage_ft'][windup_timesteps+1:],label='observed')
+                if (not rainfall_runoff_model[1]['final_model']['diverged']):
                     try:
                         ax.plot(data_train.index[windup_timesteps+1:],rainfall_runoff_model[1]['final_model']['simulated'][:,0],label='simulated')
                     except Exception as e:
@@ -412,6 +515,14 @@ for site_id in sites[13:]:
                         ax.plot(data_eval.index[windup_timesteps+1:],eval_sim['prediction'],label='simulated')
                     except Exception as e:
                         print(e)
+            else: # ABC testing for constraining rainfall and including PET
+                ax.plot(data_eval.index[windup_timesteps+1:],data_eval['stage_ft'][windup_timesteps+1:],label='observed')
+                if (not eval_sim['diverged']):
+                    try:
+                        ax.plot(data_eval.index[windup_timesteps+1:],eval_sim['prediction'],label='simulated')
+                    except Exception as e:
+                        print(e)
+                        
             ax.set_title("evaluation")
             ax.legend()
             plt.tight_layout()

@@ -1,16 +1,21 @@
 # import modpods and other libraries
 import sys
-sys.path.append("C:/modpods")
+import os
+parent_dir = os.path.dirname(os.getcwd())
+sys.path.append(parent_dir)
+sys.path.append(str(parent_dir + '/rainfall_runoff_anywhere'))
+sys.path.append(str(parent_dir + '/modpods'))
 import modpods
-sys.path.append("C:/rainfall_runoff_anywhere")
 import rainfall_runoff_anywhere
+import warnings
+warnings.filterwarnings(action='ignore')
 #print(modpods)
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
 import os
 import matplotlib.pyplot as plt
-import pickle
+#import pickle
 import math
 import datetime
 import pandas as pd
@@ -33,7 +38,9 @@ from pyairtable.formulas import match
 use_api = False
 
 # airtable tokens, saved as a csv file that's added to the .gitignore
-creds = pd.read_csv("filepath_to_creds.csv",sep='\t')
+#creds = pd.read_csv("G:/My Drive/rainfall_runoff_anywhere/dwl_creds.csv",sep='\t')
+#creds = pd.read_csv("C:/rainfall_runoff_anywhere/dwl_creds.csv",sep=',')
+creds = pd.read_csv("dwl_creds.csv",sep=',')
 
 api_key = creds["api_key"][0]
 base_id = creds["base_id"][0]
@@ -114,7 +121,7 @@ class Query:
 
 
 # model parameters
-max_iter = 100
+max_iter =  100
 max_transforms = 1 # this is the number of transformations *per input*, not total
 
 
@@ -134,40 +141,40 @@ class site_def:
 
 
 # MDOT sites
-# training dates last updated: october 19, 2023
+# training dates last updated: april 9, 2024 (before that, october 19, 2023)
 
 mdot390 = site_def("MDOT390", "Rifle River",datetime.datetime(2022,7,1),datetime.datetime(2023,10,13))
-mdot335 = site_def("MDOT335", "US 23 and Thunder Bay River",datetime.datetime(2022,7,15), datetime.datetime(2023,10,19))
-mdot488 = site_def("MDOT488","US 41 and Little Carp River",datetime.datetime(2022,7,1), datetime.datetime(2023,10,19))
-mdot752 = site_def("MDOT752","M 22 and Betsie River",datetime.datetime(2022,7,1), datetime.datetime(2023,10,19))
+mdot335 = site_def("MDOT335", "US 23 and Thunder Bay River",datetime.datetime(2022,7,15), datetime.datetime(2024,4,9))
+mdot488 = site_def("MDOT488","US 41 and Little Carp River",datetime.datetime(2022,7,1), datetime.datetime(2024,4,9))
+mdot752 = site_def("MDOT752","M 22 and Betsie River",datetime.datetime(2022,7,1), datetime.datetime(2023,12,1))
 mdot1072 = site_def("MDOT1072", "I 69 and Sauk River",datetime.datetime(2021, 10,10), datetime.datetime(2023,1,18))
 mdot1091 = site_def("MDOT1091","I69 and Hog Creek",datetime.datetime(2022,12,31),datetime.datetime(2023,7,22))
-mdot1500 = site_def("MDOT1500","US 23 and Elliot Creek",datetime.datetime(2022,7,14), datetime.datetime(2023,10,19))
-mdot2471 = site_def("MDOT2471","US 23 and Swartz Creek",datetime.datetime(2021,11,1), datetime.datetime(2023,10,19))
-mdot2491 = site_def("MDOT2491","US 23 NB and Pine Run Creek",datetime.datetime(2023,2,16), datetime.datetime(2023,10,19))
-mdot2613 = site_def("MDOT2613","MI 15", datetime.datetime(2022,7,15), datetime.datetime(2023,10,19))
+mdot1500 = site_def("MDOT1500","US 23 and Elliot Creek",datetime.datetime(2022,7,14), datetime.datetime(2024,4,9))
+mdot2471 = site_def("MDOT2471","US 23 and Swartz Creek",datetime.datetime(2021,11,1), datetime.datetime(2024,4,9))
+mdot2491 = site_def("MDOT2491","US 23 NB and Pine Run Creek",datetime.datetime(2023,2,16), datetime.datetime(2024,4,9))
+mdot2613 = site_def("MDOT2613","MI 15", datetime.datetime(2022,7,15), datetime.datetime(2024,4,9))
 mdot2892 = site_def("MDOT2892", "M30 and Tittabawasee", datetime.datetime(2022,8,10), datetime.datetime(2022,12,13))
 mdot2954 = site_def("MDOT2954","Little Presque Isle River and US 2E",datetime.datetime(2022,7,10),datetime.datetime(2022,12,19))
-mdot3082 = site_def("MDOT3082","US 127 NB and Pine River",datetime.datetime(2023,1,15), datetime.datetime(2023,10,19))
-mdot3970 = site_def("MDOT3970","S Dexter and Grand River",datetime.datetime(2022,7,1),datetime.datetime(2023,10,19))
-mdot4011 = site_def("MDOT4011","Bluewater Stony Creek",datetime.datetime(2022,8,25),datetime.datetime(2023,10,19))
-mdot4240 = site_def("MDOT4240","US 127 NB and Chippewa River",datetime.datetime(2022,10,18), datetime.datetime(2023,10,19))
-mdot4706 = site_def("MDOT4706","M 44 and Grand River",datetime.datetime(2023,1,10), datetime.datetime(2023,10,19))
-mdot4932 = site_def("MDOT4932","Fulton Street and Grand River",datetime.datetime(2022,7,25),datetime.datetime(2023,10,19))
-mdot5772 = site_def("MDOT5772","I69 Shiawasee River",datetime.datetime(2022,8,18),datetime.datetime(2023,10,19))
-mdot6140 = site_def("MDOT6140","I 94 and Clinton River Spillway",datetime.datetime(2023,3,31), datetime.datetime(2023,10,19))
-mdot6142 = site_def("MDOT6142","I 94 and Clinton River", datetime.datetime(2022,7,25),datetime.datetime(2023,10,19))
-mdot6440 = site_def("MDOT6440","M 55 and Pine Creek",datetime.datetime(2022,7,21),datetime.datetime(2023,10,19))
-mdot6513 = site_def("MDOT6513","Chocolay River",datetime.datetime(2022,7,1), datetime.datetime(2023,10,19))
-mdot7075 = site_def("MDOT7075","US 23 and Middle Branch Macon Creek",datetime.datetime(2023,3,27),datetime.datetime(2023,10,19))
-mdot7079 = site_def("MDOT7079","US 23 and Macon Creek",datetime.datetime(2021,10,1),datetime.datetime(2023,10,19))
-mdot7092 = site_def("MDOT7092","Ottawa Lake Outlet",datetime.datetime(2022,7,5), datetime.datetime(2023,10,19))
-mdot7166 = site_def("MDOT7166","Detroit-Toledo Expressway (I 75) and Plum Creek",datetime.datetime(2021,9,30),datetime.datetime(2023,10,19))
+mdot3082 = site_def("MDOT3082","US 127 NB and Pine River",datetime.datetime(2023,1,15), datetime.datetime(2024,4,9))
+mdot3970 = site_def("MDOT3970","S Dexter and Grand River",datetime.datetime(2022,7,1),datetime.datetime(2024,4,9))
+mdot4011 = site_def("MDOT4011","Bluewater Stony Creek",datetime.datetime(2022,8,25),datetime.datetime(2024,4,9))
+mdot4240 = site_def("MDOT4240","US 127 NB and Chippewa River",datetime.datetime(2022,10,18), datetime.datetime(2024,4,9))
+mdot4706 = site_def("MDOT4706","M 44 and Grand River",datetime.datetime(2023,1,10), datetime.datetime(2024,4,9))
+mdot4932 = site_def("MDOT4932","Fulton Street and Grand River",datetime.datetime(2022,7,25),datetime.datetime(2024,4,9))
+mdot5772 = site_def("MDOT5772","I69 Shiawasee River",datetime.datetime(2022,8,18),datetime.datetime(2024,3,22))
+mdot6140 = site_def("MDOT6140","I 94 and Clinton River Spillway",datetime.datetime(2023,3,31), datetime.datetime(2024,4,9))
+mdot6142 = site_def("MDOT6142","I 94 and Clinton River", datetime.datetime(2022,7,25),datetime.datetime(2024,4,9))
+mdot6440 = site_def("MDOT6440","M 55 and Pine Creek",datetime.datetime(2022,7,21),datetime.datetime(2024,4,9))
+mdot6513 = site_def("MDOT6513","Chocolay River",datetime.datetime(2022,7,1), datetime.datetime(2024,4,9))
+mdot7075 = site_def("MDOT7075","US 23 and Middle Branch Macon Creek",datetime.datetime(2023,3,27),datetime.datetime(2024,4,9))
+mdot7079 = site_def("MDOT7079","US 23 and Macon Creek",datetime.datetime(2021,10,1),datetime.datetime(2024,4,9))
+mdot7092 = site_def("MDOT7092","Ottawa Lake Outlet",datetime.datetime(2022,7,5), datetime.datetime(2024,4,9))
+mdot7166 = site_def("MDOT7166","Detroit-Toledo Expressway (I 75) and Plum Creek",datetime.datetime(2021,9,30),datetime.datetime(2024,4,9))
 mdot7587 = site_def("MDOT7587","US 31 and White River",datetime.datetime(2022,7,27),datetime.datetime(2023,4,19))
 mdot8488 = site_def("MDOT8488","Ontonagon River South Branch",datetime.datetime(2023,4,18),datetime.datetime(2023,6,15))
 mdot8706 = site_def("MDOT8706","Chicago Dr and Macatawa River",datetime.datetime(2022,8,25), datetime.datetime(2023,4,6))
 mdot8767 = site_def("MDOT8767","I96 and Crockery Creek",datetime.datetime(2022,7,25), datetime.datetime(2023,5,5))
-mdot8955 = site_def("MDOT8955","M 68 and Trout River",datetime.datetime(2022,7,15),datetime.datetime(2023,10,19))
+mdot8955 = site_def("MDOT8955","M 68 and Trout River",datetime.datetime(2022,7,15),datetime.datetime(2024,4,9))
 mdot9178 = site_def("MDOT9178","M83 and Cass", datetime.datetime(2022,10,7),datetime.datetime(2023,7,22))
 mdot9682 = site_def("MDOT9682","Stutts Creek",datetime.datetime(2022,7,25),datetime.datetime(2023,9,15))
 mdot9734 = site_def("MDOT9734","I 69 and Shiawasee River",datetime.datetime(2023,1,8),datetime.datetime(2023,9,2))
@@ -176,40 +183,40 @@ mdot11328 = site_def("MDOT11328","M 153 and Rouge River",datetime.datetime(2022,
 
 
 # other sites with good data
-ptk014 = site_def("PTK014","Oakland County Jail",datetime.datetime(2023,2,22),datetime.datetime(2023,10,19))
+ptk014 = site_def("PTK014","Oakland County Jail",datetime.datetime(2023,2,22),datetime.datetime(2024,4,9))
 
-det038 = site_def("DET038","Bear Creek - Van Dyke and 13 Mile",datetime.datetime(2023,4,14), datetime.datetime(2023,10,19))
-det033 = site_def("DET033","Red Run and 16 Mile",datetime.datetime(2022,8,15),datetime.datetime(2023,10,19))
-det027 = site_def("DET027","Brookfield and 24 Mile",datetime.datetime(2023,4,5), datetime.datetime(2023,10,19))
-det021 = site_def("DET021","Pine River and 32 Mile",datetime.datetime(2022,12,1),datetime.datetime(2023,10,19)) 
-det016 = site_def("DET016","Van Dyke and 25 Mile",datetime.datetime(2022,7,1),datetime.datetime(2023,10,19))
-det011 = site_def("DET011","Sable and Ryan",datetime.datetime(2022,10,31),datetime.datetime(2023,10,19))
-det009 = site_def("DET009","Indian and 26 Mile",datetime.datetime(2023,4,4),datetime.datetime(2023,10,19))
-det008 = site_def("DET008","Romeo and 23 Mile",datetime.datetime(2022,8,10),datetime.datetime(2023,10,19))
-det004 = site_def("DET004","Romeo and Partridge",datetime.datetime(2022,10,1),datetime.datetime(2023,10,19))
+det038 = site_def("DET038","Bear Creek - Van Dyke and 13 Mile",datetime.datetime(2023,4,14), datetime.datetime(2023,12,25))
+det033 = site_def("DET033","Red Run and 16 Mile",datetime.datetime(2022,8,15),datetime.datetime(2024,4,9))
+det027 = site_def("DET027","Brookfield and 24 Mile",datetime.datetime(2023,4,5), datetime.datetime(2024,4,9))
+det021 = site_def("DET021","Pine River and 32 Mile",datetime.datetime(2022,12,1),datetime.datetime(2024,2,6)) 
+det016 = site_def("DET016","Van Dyke and 25 Mile",datetime.datetime(2022,7,1),datetime.datetime(2024,3,11))
+det011 = site_def("DET011","Sable and Ryan",datetime.datetime(2022,10,31),datetime.datetime(2024,4,9))
+det009 = site_def("DET009","Indian and 26 Mile",datetime.datetime(2023,4,4),datetime.datetime(2024,4,9))
+det008 = site_def("DET008","Romeo and 23 Mile",datetime.datetime(2022,8,10),datetime.datetime(2024,4,9))
+det004 = site_def("DET004","Romeo and Partridge",datetime.datetime(2022,10,1),datetime.datetime(2024,4,9))
 det012 = site_def("DET012","Family and Jewell", datetime.datetime(2021, 8,1),datetime.datetime(2023,6,1))
-det015 = site_def("DET015","Van Dyke and 25 Mile 2",datetime.datetime(2022,1,15),datetime.datetime(2023,10,19))
+det015 = site_def("DET015","Van Dyke and 25 Mile 2",datetime.datetime(2022,1,15),datetime.datetime(2024,1,11))
 
 arb084 = site_def("ARB084","Stonebridge and Doral Drive",datetime.datetime(2022,8,19),datetime.datetime(2023,4,8)) # 16
 arb063 = site_def("ARB063","Fleming Creek at Parker Mill Park",datetime.datetime(2022,10,15),datetime.datetime(2023,8,24))
 arb061 = site_def("ARB061","Davis Creek at Silver Lake Road",datetime.datetime(2022,8,20),datetime.datetime(2023,8,9 ))
 arb056 = site_def("ARB056","Highpoint Industrial", datetime.datetime(2022,8,15),datetime.datetime(2023,8,9))
-arb049 = site_def("ARB049","Kensington Woods",datetime.datetime(2022,12,31), datetime.datetime(2023,10,19))
+arb049 = site_def("ARB049","Kensington Woods",datetime.datetime(2022,12,31), datetime.datetime(2024,4,9))
 arb048 = site_def("ARB048","Honey Creek at Dexter",datetime.datetime(2021,7,1),datetime.datetime(2022,11,1))
 arb047 = site_def("ARB047","Kirkway",datetime.datetime(2022,2,15),datetime.datetime(2023,1,24))
 arb029 = site_def("ARB029","Horseshoe Lake",datetime.datetime(2021,3,15), datetime.datetime(2022,9,1))
-arb006 = site_def("ARB006","Hilton Garden Inn",datetime.datetime(2021,6,15),datetime.datetime(2023,10,19))
-arb002 = site_def("ARB002","Ellsworth South Inlet",datetime.datetime(2023,4,22),datetime.datetime(2023,10,19))
+arb006 = site_def("ARB006","Hilton Garden Inn",datetime.datetime(2021,6,15),datetime.datetime(2024,4,9))
+arb002 = site_def("ARB002","Ellsworth South Inlet",datetime.datetime(2023,4,22),datetime.datetime(2024,4,9))
 arb013 = site_def("ARB013","Kensington Road",datetime.datetime(2022,6,20), datetime.datetime(2022,11,15))  # 26
 arb026 = site_def("ARB026","South Commerce Lake",datetime.datetime(2021,7,1),datetime.datetime(2023,2,1))
-arb034 = site_def("ARB034","Huron River at Shotwell",datetime.datetime(2021,7,1),datetime.datetime(2023,10,19))
+arb034 = site_def("ARB034","Huron River at Shotwell",datetime.datetime(2021,7,1),datetime.datetime(2024,4,9))
 #arb031 = site_def("ARB031", "Huron River at Forest Avenue", datetime.datetime(2022, 2, 1), datetime.datetime(2022, 12, 31))
 arb061 = site_def("ARB061","Davis Creek at Silver Lake Road", datetime.datetime(2022, 9,1),datetime.datetime(2023,8,9))
 arb003 = site_def("ARB003","Ellsworth North Inlet", datetime.datetime(2022,6,19),datetime.datetime(2022,9,10))
 arb015 = site_def("ARB015","Chalmers Drain",datetime.datetime(2022, 6, 1), datetime.datetime(2023, 1, 15))
-arb071 = site_def("ARB071","Brownstown Creek",datetime.datetime(2022,12,15),datetime.datetime(2023,10,19)) 
-arb025 = site_def("ARB025", "Huron River at Maiden Lane", datetime.datetime(2022, 7,1),datetime.datetime(2023,10,19))
-arb083 = site_def("ARB083","Arms Creek at Strawberry Lake Road", datetime.datetime(2022,9,1),datetime.datetime(2023,10,19))
+arb071 = site_def("ARB071","Brownstown Creek",datetime.datetime(2022,12,15),datetime.datetime(2024, 4, 9)) 
+arb025 = site_def("ARB025", "Huron River at Maiden Lane", datetime.datetime(2022, 7,1),datetime.datetime(2024,4,9))
+arb083 = site_def("ARB083","Arms Creek at Strawberry Lake Road", datetime.datetime(2022,9,1),datetime.datetime(2024,4,9))
 arb028 = site_def("ARB028","Honey and Huron at Wagner", datetime.datetime(2021, 6, 23), datetime.datetime(2022,6,1)) # - all simulations diverged before date change
 
 
@@ -219,10 +226,36 @@ for ob in gc.get_objects():
         sites.append(ob)
 
 
+# generate summary statistics for end_date - start_date (training length) for all the sites (as a group)
+# this is useful for determining how much data we have for training
+training_lengths = list()
+
+for site in sites:
+    # for ems revisions, want to talk about the state of models when we submitted, which had a max training end date of october 19, 2023
+    # if the end date is after oct 19, 2023, use 0ct 19, 2023 as the end date
+    #if site.end_date > datetime.datetime(2023,10,19):
+    #    training_lengths.append((datetime.datetime(2023,10,19) - site.start_date).days)
+    training_lengths.append((site.end_date - site.start_date).days)
+
+print("training lengths")
+print(training_lengths)
+# print a table of summary statistics
+print("training length summary statistics")
+print("mean: " + str(np.mean(training_lengths)))
+print("median: " + str(np.median(training_lengths)))
+print("min: " + str(np.min(training_lengths)))
+print("max: " + str(np.max(training_lengths)))
+print("std: " + str(np.std(training_lengths)))
+# quartiles
+print("25th percentile: " + str(np.percentile(training_lengths,25)))
+print("75th percentile: " + str(np.percentile(training_lengths,75)))
+
+
+
 print("number of sites to train: " + str(len(sites)))
 
 
-for site in sites:
+for site in sites[60:]:
     print("Beginning training for")
     print(site.site_id)
     print(site.site_name)
@@ -298,7 +331,9 @@ for site in sites:
     # ref usgs_eval.py for all the below
 
     # fetch the forcing data based on sampling points (already saved) 
-    folder_path = str("G:/My Drive/rainfall_runoff_anywhere/DWL/" + str(site.site_id))
+    #folder_path = str("G:/My Drive/rainfall_runoff_anywhere/DWL/" + str(site.site_id))
+    #folder_path = str("C:/rainfall_runoff_anywhere/DWL/" + str(site.site_id))
+    folder_path = str("DWL/" + str(site.site_id))
     with open(str(folder_path + "/close_points.points") , 'rb') as fp:
         close_points = pickle.load(fp)
     with open(str(folder_path + "/mid_points.points") , 'rb') as fp:
@@ -430,14 +465,34 @@ for site in sites:
             exit()
         start = time.perf_counter()
         print("training model for site " + str(site.site_id) + " with model configuration " + model_config)
-            
+        # drop the PET column
+        try:
+            data.drop(columns='PET',inplace=True)
+        except Exception as e:
+            print(e)
+        try: 
+            # remove PET from forcing_columns
+            forcing_columns.remove('PET')
+        except Exception as e:
+            print(e)
+        forcing_coef_constraints = dict()
+        for col in forcing_columns:
+            if ('precip_mm' in col) or ('snowmelt' in col):
+                forcing_coef_constraints[col] = 1
+            elif 'PET' in col:
+                forcing_coef_constraints[col] = -1
+            else:
+                forcing_coef_constraints[col] = 0                        
+
         rainfall_runoff_model = modpods.delay_io_train(data,target_column,forcing_columns,windup_timesteps = windup_timesteps, 
                                                         init_transforms=1,max_transforms=max_transforms,max_iter=max_iter,
-                                                        poly_order = poly_order, verbose = False,bibo_stable=True)
+                                                        poly_order = poly_order, verbose = False,bibo_stable=True, forcing_coef_constraints = forcing_coef_constraints)
         end = time.perf_counter()
         training_time_minutes = (end-start)/60
 
-        results_folder_path =  str("G:/My Drive/rainfall_runoff_anywhere/DWL/" + str(site.site_id) + "/" + str(model_config) + "/")
+        #results_folder_path =  str("G:/My Drive/rainfall_runoff_anywhere/DWL/" + str(site.site_id) + "/" + str(model_config) + "/")
+        #results_folder_path = str("C:/rainfall_runoff_anywhere/DWL/" + str(site.site_id) + "/" + str(model_config) + "/")
+        results_folder_path = str("DWL/" + str(site.site_id) + "/" + str(model_config) + "/")
         if not os.path.exists(results_folder_path):
             os.makedirs(results_folder_path)
         with open(str(results_folder_path + "model.pkl"),'wb') as f:
