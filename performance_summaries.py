@@ -12,7 +12,7 @@ import copy
 # show all the columns whenever we print a dataframe
 pd.set_option('display.max_columns', None) # comment out if too much text output
 
-dataset = "usgs" # usgs, DWL, or GLWA
+dataset = "usgs" # usgs, DWL, or SEWER
 show = False # show the plots live or just save them
 if dataset == "usgs":
     data_configs = ['discharge','stage','discharge_station_precip','stage_station_precip']
@@ -21,7 +21,7 @@ if dataset == "usgs":
 if dataset == "DWL":
     model_configs = ['poly1','poly2','poly3']
 
-if dataset == "GLWA":
+if dataset == "SEWER":
     time_configs = ['hourly','train_first','train_last']
     target_configs = ['flow','depth']
     data_configs = ['rain_gage_only','meteostat_only','rain_gage_and_meteostat']
@@ -976,7 +976,7 @@ elif dataset == 'DWL':
 
 
 
-elif dataset == 'GLWA':
+elif dataset == 'SEWER':
     
     for subdir, dirs, files in os.walk(folder_path): 
         #print(subdir)

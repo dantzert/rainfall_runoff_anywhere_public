@@ -1,2 +1,2 @@
-,Unnamed: 0.3,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,windup_days,windup_hours
-0,0,0,0,0,MDOT5772,I69 Shiawasee River,42.6073,-83.9659,59.93965534698176,True,False,False,False,False,-0.22413333333333332,0.0,14.350416446643893,344
+,Unnamed: 0.6,Unnamed: 0.5,Unnamed: 0.4,Unnamed: 0.3,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,windup_days,windup_hours
+0,0,0,0,0,0,0,0,MDOT5772,I69 Shiawasee River,42.6073,-83.9659,59.93965534698176,True,False,False,False,False,-0.21156,0.0,14.350416446643893,344

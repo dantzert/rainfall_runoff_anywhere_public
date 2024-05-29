@@ -1,2 +1,2 @@
-,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,windup_days,windup_hours
-0,0,0,0,ARB028,Honey and Huron at Wagner,42.317638,-83.796116,1.619990685053561,True,False,False,False,False,0.9790800000000001,0.0,14.009470714774158,336
+,Unnamed: 0.10,Unnamed: 0.9,Unnamed: 0.8,Unnamed: 0.7,Unnamed: 0.6,Unnamed: 0.5,Unnamed: 0.4,Unnamed: 0.3,Unnamed: 0.2,Unnamed: 0.1,Unnamed: 0,Site ID,Site Name,Latitude,Longitude,Delineated Area [km^2],close_precip_used,mid_precip_used,far_precip_used,snowmelt_nowind_used,snowmelt_wind_used,depth_ft_training_offset,close_precip_mm_training_offset,windup_days,windup_hours
+0,0,0,0,0,0,0,0,0,0,0,0,ARB028,Honey and Huron at Wagner,42.317638,-83.796116,1.619990685053561,True,False,False,False,False,0.9790800000000001,0.0,14.009470714774158,336
